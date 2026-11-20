@@ -1,0 +1,24 @@
+﻿# Python 
+.venv/ 
+__pycache__/ 
+*.pyc 
+.pytest_cache/ 
+ 
+# Node / Frontend (if added later) 
+node_modules/ 
+dist/ 
+ 
+# Secrets & Local Personal Data (NEVER COMMIT) 
+.env 
+data/ 
+uploads/ 
+*.db 
+*.sqlite 
+*.sqlite3 
+*.pdf 
+*.docx 
+*.csv 
+ 
+# IDEs 
+.idea/ 
+.vscode/ 
