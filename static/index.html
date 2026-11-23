@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prescription Parser</title>
+  <style>
+    :root { color-scheme: light; font-family: Georgia, "Times New Roman", serif; }
+    h1, h2, h3, button, input { font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #f5f7fb; color: #162033; }
+    main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 16px; }
+    .split { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(300px, 1fr); gap: 16px; }
+    .panel { min-height: 520px; background: white; border: 1px solid #dfe5ef; border-radius: 12px; padding: 16px; }
+    .drop { border: 2px dashed #8794aa; border-radius: 10px; min-height: 230px; display: grid; place-items: center; text-align: center; }
+    pre { white-space: pre-wrap; max-height: 360px; overflow: auto; background: #f8fafc; padding: 12px; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #e7ebf2; padding: 8px; text-align: left; }
+    input, button { padding: 9px 11px; border-radius: 7px; border: 1px solid #cbd3df; }
+    button { background: #2563eb; color: white; border: 0; cursor: pointer; }
+    #status { min-height: 24px; color: #475569; }
+    @media (max-width: 780px) { .split { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Prescription Parser</h1>
+    <div class="split">
+      <section class="panel">
+        <h2>1. Upload or OCR source</h2>
+        <label class="drop" for="prescription-file">
+          <span><strong>Choose PDF or image</strong><br><small>PDF analysis uses Ollama; images use local OCR</small></span>
+        </label>
+        <input id="prescription-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.bmp,.tif,.tiff,.webp" hidden>
+        <h3>Extracted source</h3>
+        <pre id="source-preview">No prescription selected.</pre>
+      </section>
+      <section class="panel">
+        <h2>2. Review medications</h2>
+        <div id="status"></div>
+        <table>
+          <thead><tr><th>Name</th><th>Dosage</th><th>Frequency</th><th>Route</th><th>Start date</th></tr></thead>
+          <tbody id="medication-rows"></tbody>
+        </table>
+        <button id="confirm-button" type="button" disabled>Confirm medications</button>
+      </section>
+    </div>
+  </main>
+  <script>
+    const fileInput = document.querySelector("#prescription-file");
+    const rows = document.querySelector("#medication-rows");
+    const status = document.querySelector("#status");
+    const confirmButton = document.querySelector("#confirm-button");
+    let medications = [];
+
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      status.textContent = "Analyzing prescription...";
+      const endpoint = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+        ? "/api/upload-pdf/" : "/api/upload-image/";
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        const response = await fetch(endpoint, { method: "POST", body: form });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || "Analysis failed");
+        medications = payload.medications || [];
+        rows.replaceChildren(...medications.map(medication => {
+          const tr = document.createElement("tr");
+          ["name", "dosage", "frequency", "route", "start_date"].forEach(key => {
+            const td = document.createElement("td");
+            td.textContent = medication[key] || "";
+            tr.appendChild(td);
+          });
+          return tr;
+        }));
+        document.querySelector("#source-preview").textContent =
+          medications.length ? JSON.stringify(medications, null, 2) : "No medications extracted.";
+        confirmButton.disabled = medications.length === 0;
+        status.textContent = `${medications.length} medication(s) extracted`;
+      } catch (error) {
+        status.textContent = error.message;
+        confirmButton.disabled = true;
+      }
+    });
+
+    confirmButton.addEventListener("click", async () => {
+      status.textContent = "Saving medications...";
+      const response = await fetch("/api/medications/confirm/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ medications })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        status.textContent = payload.detail || "Confirmation failed";
+        return;
+      }
+      status.textContent = `${payload.medications.length} medication(s) confirmed`;
+    });
+  </script>
+</body>
+</html>
